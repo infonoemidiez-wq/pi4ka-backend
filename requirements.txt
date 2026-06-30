@@ -1,0 +1,6 @@
+cls
+fastapi
+uvicorn
+motor
+python-dotenv
+pydantic
