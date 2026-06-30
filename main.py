@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from dotenv import load_dotenv
 import os
+from contextlib import asynccontextmanager
 
 # ── Configuración ──────────────────────────────────────────────
 load_dotenv()
@@ -12,7 +13,22 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME   = os.getenv("DB_NAME", "pi4kaDB")
 
-app = FastAPI(title="PI4KA España API")
+# ── Gestión del Ciclo de Vida de la Aplicación (Lifespan) ──────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Esto se ejecuta al arrancar la aplicación (Antiguo startup)
+    app.client = AsyncIOMotorClient(MONGO_URI)
+    app.db     = app.client[DB_NAME]
+    print(f"✅ Conectado a MongoDB Atlas / base de datos: {DB_NAME}")
+    
+    yield  # Aquí la API se queda escuchando peticiones normalmente
+    
+    # Esto se ejecuta al apagar la aplicación (Antiguo shutdown)
+    app.client.close()
+    print("🛑 Conexión a MongoDB Atlas cerrada.")
+
+# ── Inicialización de FastAPI ──────────────────────────────────
+app = FastAPI(title="PI4KA España API", lifespan=lifespan)
 
 # Permite que el HTML llame a esta API
 app.add_middleware(
@@ -20,18 +36,8 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
-
-# ── Conexión a MongoDB Atlas ───────────────────────────────────
-@app.on_event("startup")
-async def conectar_db():
-    app.client = AsyncIOMotorClient(MONGO_URI)
-    app.db     = app.client[DB_NAME]
-    print(f"✅ Conectado a MongoDB Atlas / base de datos: {DB_NAME}")
-
-@app.on_event("shutdown")
-async def cerrar_db():
-    app.client.close()
 
 # ── Modelo de datos ────────────────────────────────────────────
 class Caso(BaseModel):
@@ -52,7 +58,7 @@ def caso_a_dict(caso) -> dict:
 
 @app.get("/")
 async def raiz():
-    return {"mensaje": "API PI4KA España funcionando correctamente 🧬"}
+    return {"mensaje": "API PI4KA España funcionando correctamente 😊"}
 
 @app.get("/casos")
 async def obtener_casos_publicados():
